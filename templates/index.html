@@ -455,7 +455,11 @@
         // Fetch data function
         async function fetchSensorData(period = 'latest', val = '') {
             try {
-                const url = period === 'latest' ? '/api/data' : `/api/data?period=${period}&val=${val}`;
+                const BASE_URL = "http://18.232.105.24:5000";
+
+const url = period === 'latest' 
+  ? BASE_URL + '/api/data' 
+  : `${BASE_URL}/api/data?period=${period}&val=${val}`;
                 const response = await fetch(url);
                 const data = await response.json();
 
