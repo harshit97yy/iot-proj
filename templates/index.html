@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IoT Sensor Dashboard</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+        }
+
+        .glass-card {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .animate-pulse-slow {
+            animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+    </style>
+</head>
+
+<body class="min-h-screen py-8 px-4 sm:px-8">
+    <div class="max-w-6xl mx-auto">
+        <header class="mb-10 text-center">
+            <h1
+                class="text-4xl md:text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400 mb-2">
+                Live Sensor Monitor</h1>
+            <p class="text-slate-400">Real-time IoT data directly from your physical environment</p>
+        </header>
+
+        <!-- Widgets Grid -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+            <!-- Temp Widget -->
+            <div
+                class="glass-card rounded-2xl p-6 flex flex-col items-center justify-center transition-transform hover:-translate-y-1 duration-300">
+                <h2 class="text-lg font-medium text-slate-300 mb-2">Temperature</h2>
+                <div class="flex items-end">
+                    <span id="valTemp" class="text-5xl font-bold text-orange-400">--</span>
+                    <span class="text-xl text-slate-400 ml-2 mb-1">°C</span>
+                </div>
+            </div>
+
+            <!-- Humidity Widget -->
+            <div
+                class="glass-card rounded-2xl p-6 flex flex-col items-center justify-center transition-transform hover:-translate-y-1 duration-300">
+                <h2 class="text-lg font-medium text-slate-300 mb-2">Humidity</h2>
+                <div class="flex items-end">
+                    <span id="valHum" class="text-5xl font-bold text-blue-400">--</span>
+                    <span class="text-xl text-slate-400 ml-2 mb-1">%</span>
+                </div>
+            </div>
+
+            <!-- Air Quality Widget -->
+            <div
+                class="glass-card rounded-2xl p-6 flex flex-col items-center justify-center transition-transform hover:-translate-y-1 duration-300">
+                <h2 class="text-lg font-medium text-slate-300 mb-2">Air Quality</h2>
+                <div class="flex flex-col items-center">
+                    <span id="valAir" class="text-4xl font-bold text-emerald-400 break-words text-center">--</span>
+                </div>
+            </div>
+
+            <!-- Dust Widget -->
+            <div
+                class="glass-card rounded-2xl p-6 flex flex-col items-center justify-center transition-transform hover:-translate-y-1 duration-300">
+                <h2 class="text-lg font-medium text-slate-300 mb-2">Dust Level</h2>
+                <div class="flex flex-col items-center">
+                    <span id="valDust" class="text-4xl font-bold text-yellow-400 break-words text-center">--</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="glass-card rounded-2xl p-4 mb-8 flex flex-wrap items-center gap-4">
+            <div class="flex items-center gap-2 text-slate-200">
+                <label for="periodSelect" class="font-medium">Data View:</label>
+                <select id="periodSelect"
+                    class="bg-slate-800 border border-slate-600 rounded px-2 py-1 text-sm outline-none">
+                    <option value="latest">Live (Polls every 2s)</option>
+                    <option value="day">By Day</option>
+                    <option value="month">By Month</option>
+                    <option value="year">By Year</option>
+                </select>
+            </div>
+            <div id="filterValContainer" class="hidden flex items-center gap-2 text-slate-200">
+                <label id="dateLabel" for="filterVal">Value:</label>
+                <input type="date" id="filterVal"
+                    class="bg-slate-800 border border-slate-600 rounded px-2 py-1 text-sm outline-none text-white appearance-none"
+                    style="color-scheme: dark">
+            </div>
+            <button onclick="applyFilters()"
+                class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-1 rounded text-sm transition-colors">Load
+                History</button>
+        </div>
+
+        <!-- Charts Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-10">
+            <!-- Temp & Hum Chart -->
+            <div class="bg-[#1a1c23] rounded-3xl p-6 flex flex-col shadow-2xl border border-slate-800">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-xl font-semibold text-slate-100">Temp & Humidity</h3>
+                    <div class="flex items-center gap-2 bg-[#1e232e] px-3 py-1.5 rounded-full border border-slate-700 shadow-sm ml-auto">
+                        <div id="statusDotTemp" class="w-2 h-2 rounded-full bg-slate-500"></div>
+                        <span id="statusTextTemp" class="text-slate-300 text-xs font-semibold tracking-wide">--</span>
+                    </div>
+                </div>
+                <div class="flex gap-3 mb-6">
+                    <button onclick="setChartType(tempHumChart, 'line')"
+                        class="flex items-center justify-center w-12 h-10 border border-slate-600 rounded-lg hover:bg-slate-700 transition">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-slate-300">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                        </svg>
+                    </button>
+                    <button onclick="setChartType(tempHumChart, 'bar')"
+                        class="flex items-center justify-center w-12 h-10 border border-slate-600 rounded-lg hover:bg-slate-700 transition">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-slate-300">
+                            <line x1="18" y1="20" x2="18" y2="10"></line>
+                            <line x1="12" y1="20" x2="12" y2="4"></line>
+                            <line x1="6" y1="20" x2="6" y2="14"></line>
+                        </svg>
+                    </button>
+                    <div class="ml-auto block">
+                        <select
+                            class="bg-[#1e232e] text-slate-300 border border-slate-700 rounded-lg px-3 flex items-center h-10 text-sm outline-none cursor-pointer">
+                            <option>24 Hours</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="border border-slate-700 rounded-2xl p-4 bg-[#14161b] relative mb-6">
+                    <div
+                        class="flex items-center gap-2 mb-2 absolute top-4 left-4 z-10 bg-[#1e232e] px-3 py-1.5 rounded-full border border-slate-600/50">
+                        <div class="w-2.5 h-2.5 rounded-full bg-slate-400"></div>
+                        <span class="text-slate-300 text-xs font-semibold">Sensor Node</span>
+                    </div>
+                    <div class="relative h-64 w-full mt-8">
+                        <canvas id="tempHumChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="flex justify-between mt-auto">
+                    <div class="flex items-center gap-3">
+                        <div
+                            class="bg-[#facc15] text-slate-900 font-bold rounded-xl w-14 h-14 flex items-center justify-center text-xl shadow">
+                            <span id="minTemp">--</span>
+                        </div>
+                        <div class="flex flex-col">
+                            <span class="text-white font-bold text-base">Min.</span>
+                            <span class="text-slate-400 text-xs text-left">Temp/Hum</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-3 text-right">
+                        <div class="flex flex-col">
+                            <span class="text-white font-bold text-base">Max.</span>
+                            <span class="text-slate-400 text-xs">Temp/Hum</span>
+                        </div>
+                        <div
+                            class="bg-[#f97316] text-white font-bold rounded-xl w-14 h-14 flex items-center justify-center text-xl shadow text-center">
+                            <span id="maxTemp">--</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Air Quality Chart -->
+            <div class="bg-[#1a1c23] rounded-3xl p-6 flex flex-col shadow-2xl border border-slate-800">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-xl font-semibold text-slate-100">Air Quality</h3>
+                    <div class="flex items-center gap-2 bg-[#1e232e] px-3 py-1.5 rounded-full border border-slate-700 shadow-sm ml-auto">
+                        <div id="statusDotAir" class="w-2 h-2 rounded-full bg-slate-500"></div>
+                        <span id="statusTextAir" class="text-slate-300 text-xs font-semibold tracking-wide">--</span>
+                    </div>
+                </div>
+                <div class="flex gap-3 mb-6">
+                    <button onclick="setChartType(airChart, 'line')"
+                        class="flex items-center justify-center w-12 h-10 border border-slate-600 rounded-lg hover:bg-slate-700 transition">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-slate-300">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                        </svg>
+                    </button>
+                    <button onclick="setChartType(airChart, 'bar')"
+                        class="flex items-center justify-center w-12 h-10 border border-slate-600 rounded-lg hover:bg-slate-700 transition">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-slate-300">
+                            <line x1="18" y1="20" x2="18" y2="10"></line>
+                            <line x1="12" y1="20" x2="12" y2="4"></line>
+                            <line x1="6" y1="20" x2="6" y2="14"></line>
+                        </svg>
+                    </button>
+                    <div class="ml-auto block">
+                        <select
+                            class="bg-[#1e232e] text-slate-300 border border-slate-700 rounded-lg px-3 flex items-center h-10 text-sm outline-none cursor-pointer">
+                            <option>AQI</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="border border-slate-700 rounded-2xl p-4 bg-[#14161b] relative mb-6">
+                    <div
+                        class="flex items-center gap-2 mb-2 absolute top-4 left-4 z-10 bg-[#1e232e] px-3 py-1.5 rounded-full border border-slate-600/50">
+                        <div class="w-2.5 h-2.5 rounded-full bg-slate-500"></div>
+                        <span class="text-slate-300 text-xs font-semibold">Sensor Node</span>
+                    </div>
+                    <div class="relative h-64 w-full mt-8">
+                        <canvas id="airChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="flex justify-between mt-auto">
+                    <div class="flex items-center gap-3">
+                        <div
+                            class="bg-[#facc15] text-slate-900 font-bold rounded-xl w-14 h-14 flex items-center justify-center text-xl shadow text-center">
+                            <span id="minAir">--</span>
+                        </div>
+                        <div class="flex flex-col text-left">
+                            <span class="text-white font-bold text-base">Min.</span>
+                            <span class="text-slate-400 text-xs">AQI</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-3 text-right">
+                        <div class="flex flex-col">
+                            <span class="text-white font-bold text-base">Max.</span>
+                            <span class="text-slate-400 text-xs">AQI</span>
+                        </div>
+                        <div
+                            class="bg-[#f97316] text-white font-bold rounded-xl w-14 h-14 flex items-center justify-center text-xl shadow text-center">
+                            <span id="maxAir">--</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dust Level Chart -->
+            <div
+                class="bg-[#1a1c23] rounded-3xl p-6 flex flex-col shadow-2xl border border-slate-800 lg:col-span-2 mx-auto w-full lg:w-1/2 min-w-[300px]">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-xl font-semibold text-slate-100">Dust Level</h3>
+                    <div class="flex items-center gap-2 bg-[#1e232e] px-3 py-1.5 rounded-full border border-slate-700 shadow-sm ml-auto">
+                        <div id="statusDotDust" class="w-2 h-2 rounded-full bg-slate-500"></div>
+                        <span id="statusTextDust" class="text-slate-300 text-xs font-semibold tracking-wide">--</span>
+                    </div>
+                </div>
+                <div class="flex gap-3 mb-6">
+                    <button onclick="setChartType(dustChart, 'line')"
+                        class="flex items-center justify-center w-12 h-10 border border-slate-600 rounded-lg hover:bg-slate-700 transition">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-slate-300">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                        </svg>
+                    </button>
+                    <button onclick="setChartType(dustChart, 'bar')"
+                        class="flex items-center justify-center w-12 h-10 border border-slate-600 rounded-lg hover:bg-slate-700 transition">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-slate-300">
+                            <line x1="18" y1="20" x2="18" y2="10"></line>
+                            <line x1="12" y1="20" x2="12" y2="4"></line>
+                            <line x1="6" y1="20" x2="6" y2="14"></line>
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="border border-slate-700 rounded-2xl p-4 bg-[#14161b] relative mb-6">
+                    <div
+                        class="flex items-center gap-2 mb-2 absolute top-4 left-4 z-10 bg-[#1e232e] px-3 py-1.5 rounded-full border border-slate-600/50">
+                        <div class="w-2.5 h-2.5 rounded-full bg-slate-500"></div>
+                        <span class="text-slate-300 text-xs font-semibold">Sensor Node</span>
+                    </div>
+                    <div class="relative h-64 w-full mt-8">
+                        <canvas id="dustChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="flex justify-between mt-auto">
+                    <div class="flex items-center gap-3">
+                        <div
+                            class="bg-[#facc15] text-slate-900 font-bold rounded-xl w-14 h-14 flex items-center justify-center text-xl shadow text-center">
+                            <span id="minDust">--</span>
+                        </div>
+                        <div class="flex flex-col text-left">
+                            <span class="text-white font-bold text-base">Min.</span>
+                            <span class="text-slate-400 text-xs">Dust</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-3 text-right">
+                        <div class="flex flex-col">
+                            <span class="text-white font-bold text-base">Max.</span>
+                            <span class="text-slate-400 text-xs">Dust</span>
+                        </div>
+                        <div
+                            class="bg-[#f97316] text-white font-bold rounded-xl w-14 h-14 flex items-center justify-center text-xl shadow text-center">
+                            <span id="maxDust">--</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        // Set defaults for charts to look good on dark mode
+        Chart.defaults.color = '#94a3b8';
+        Chart.defaults.font.family = 'Inter';
+
+        const chartOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            scales: {
+                x: { grid: { display: false, drawBorder: false }, ticks: { color: '#64748b' } },
+                y: { grid: { color: 'rgba(255,255,255,0.05)', borderDash: [5, 5], drawBorder: false }, ticks: { color: '#64748b' } }
+            },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: 'rgba(30, 41, 59, 0.95)',
+                    titleColor: '#e2e8f0',
+                    bodyColor: '#e2e8f0',
+                    borderColor: 'rgba(255,255,255,0.1)',
+                    borderWidth: 1,
+                    padding: 12,
+                    cornerRadius: 8,
+                    displayColors: true
+                }
+            }
+        };
+
+        // Initialize Charts
+        const tempHumCtx = document.getElementById('tempHumChart').getContext('2d');
+        const airCtx = document.getElementById('airChart').getContext('2d');
+        const dustCtx = document.getElementById('dustChart').getContext('2d');
+
+        const tempHumChart = new Chart(tempHumCtx, {
+            type: 'bar',
+            data: {
+                labels: [],
+                datasets: [
+                    {
+                        label: 'Temperature (°C)',
+                        borderColor: '#fb923c',
+                        backgroundColor: '#fb923c',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        data: [],
+                        pointRadius: 4,
+                        pointBackgroundColor: '#fb923c',
+                        borderRadius: 3
+                    },
+                    {
+                        label: 'Humidity (%)',
+                        borderColor: '#34d399',
+                        backgroundColor: '#34d399',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        data: [],
+                        pointRadius: 4,
+                        pointBackgroundColor: '#34d399',
+                        borderRadius: 3
+                    }
+                ]
+            },
+            options: chartOptions
+        });
+
+        const airChart = new Chart(airCtx, {
+            type: 'bar',
+            data: {
+                labels: [],
+                datasets: [
+                    {
+                        label: 'Air Quality',
+                        borderColor: '#facc15',
+                        backgroundColor: '#facc15',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        data: [],
+                        pointRadius: 4,
+                        pointBackgroundColor: '#facc15',
+                        fill: false,
+                        borderRadius: 3
+                    }
+                ]
+            },
+            options: chartOptions
+        });
+
+        const dustChart = new Chart(dustCtx, {
+            type: 'bar',
+            data: {
+                labels: [],
+                datasets: [
+                    {
+                        label: 'Dust Level',
+                        borderColor: '#facc15',
+                        backgroundColor: '#facc15',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        data: [],
+                        pointRadius: 4,
+                        pointBackgroundColor: '#facc15',
+                        fill: false,
+                        borderRadius: 3
+                    }
+                ]
+            },
+            options: chartOptions
+        });
+
+        // Evaluation Functions
+        function evaluateDust(value) {
+            if (isNaN(value)) return { text: '--', color: 'bg-slate-500' };
+            if (value < 100) return { text: 'Very Good', color: 'bg-[#34d399]' };
+            if (value <= 200) return { text: 'Good', color: 'bg-[#6ee7b7]' };
+            if (value <= 300) return { text: 'Moderate', color: 'bg-[#facc15]' };
+            if (value <= 400) return { text: 'Poor', color: 'bg-[#fb923c]' };
+            return { text: 'Very Bad', color: 'bg-[#ef4444]' };
+        }
+
+        function evaluateAir(value) {
+            if (isNaN(value)) return { text: '--', color: 'bg-slate-500' };
+            if (value <= 50) return { text: 'Very Good', color: 'bg-[#34d399]' };
+            if (value <= 100) return { text: 'Good', color: 'bg-[#6ee7b7]' };
+            if (value <= 150) return { text: 'Moderate', color: 'bg-[#facc15]' };
+            if (value <= 200) return { text: 'Poor', color: 'bg-[#fb923c]' };
+            return { text: 'Very Bad', color: 'bg-[#ef4444]' };
+        }
+
+        function evaluateTempHum(temp, hum) {
+            if (isNaN(temp) || isNaN(hum)) return { text: '--', color: 'bg-slate-500' };
+            if (temp >= 18 && temp <= 28 && hum >= 30 && hum <= 60) return { text: 'Good', color: 'bg-[#34d399]' };
+            if (temp > 35 || temp < 10 || hum > 80 || hum < 20) return { text: 'Bad', color: 'bg-[#ef4444]' };
+            return { text: 'Moderate', color: 'bg-[#facc15]' };
+        }
+
+        function updateStatusBadge(idPrefix, status) {
+            const dot = document.getElementById(`statusDot${idPrefix}`);
+            const text = document.getElementById(`statusText${idPrefix}`);
+            if (dot && text) {
+                dot.className = `w-2 h-2 rounded-full ${status.color}`;
+                text.innerText = status.text;
+            }
+        }
+
+        // Fetch data function
+        async function fetchSensorData(period = 'latest', val = '') {
+            try {
+                const url = period === 'latest' ? '/api/data' : `/api/data?period=${period}&val=${val}`;
+                const response = await fetch(url);
+                const data = await response.json();
+
+                // Update Widgets
+                if (data.latest) {
+                    if (document.getElementById('valTemp')) document.getElementById('valTemp').innerText = (data.latest.temp !== "--" && data.latest.temp !== null) ? data.latest.temp : "--";
+                    if (document.getElementById('valHum')) document.getElementById('valHum').innerText = (data.latest.hum !== "--" && data.latest.hum !== null) ? data.latest.hum : "--";
+                    if (document.getElementById('valAir')) document.getElementById('valAir').innerText = (data.latest.air !== "--" && data.latest.air !== null) ? data.latest.air : "--";
+                    if (document.getElementById('valDust')) document.getElementById('valDust').innerText = (data.latest.dust !== "--" && data.latest.dust !== null) ? data.latest.dust : "--";
+                    
+                    if (period === 'latest') {
+                        let t = parseFloat(data.latest.temp);
+                        let h = parseFloat(data.latest.hum);
+                        let a = parseFloat(data.latest.air);
+                        let d = parseFloat(data.latest.dust);
+                        updateStatusBadge('Temp', evaluateTempHum(t, h));
+                        updateStatusBadge('Air', evaluateAir(a));
+                        updateStatusBadge('Dust', evaluateDust(d));
+                    }
+                }
+
+                // Update Charts
+                if (data.history && data.history.length > 0) {
+                    const labels = data.history.map(item => item.time);
+                    const temps = data.history.map(item => parseFloat(item.temp));
+                    const hums = data.history.map(item => parseFloat(item.hum));
+                    const airs = data.history.map(item => parseFloat(item.air));
+                    const dusts = data.history.map(item => parseFloat(item.dust));
+
+                    // Safely find min and max, avoiding Infinity if array empty or invalid
+                    const safeMin = arr => { const v = arr.filter(n => !isNaN(n)); return v.length ? Math.min(...v).toFixed(2) : '--'; };
+                    const safeMax = arr => { const v = arr.filter(n => !isNaN(n)); return v.length ? Math.max(...v).toFixed(2) : '--'; };
+
+                    if (document.getElementById('minTemp')) document.getElementById('minTemp').innerText = safeMin(temps);
+                    if (document.getElementById('maxTemp')) document.getElementById('maxTemp').innerText = safeMax(temps);
+                    if (document.getElementById('minAir')) document.getElementById('minAir').innerText = safeMin(airs);
+                    if (document.getElementById('maxAir')) document.getElementById('maxAir').innerText = safeMax(airs);
+                    if (document.getElementById('minDust')) document.getElementById('minDust').innerText = safeMin(dusts);
+                    if (document.getElementById('maxDust')) document.getElementById('maxDust').innerText = safeMax(dusts);
+
+                    tempHumChart.data.labels = labels;
+                    tempHumChart.data.datasets[0].data = temps;
+                    tempHumChart.data.datasets[1].data = hums;
+                    tempHumChart.update();
+
+                    airChart.data.labels = labels;
+                    airChart.data.datasets[0].data = airs;
+                    airChart.update();
+
+                    dustChart.data.labels = labels;
+                    dustChart.data.datasets[0].data = dusts;
+                    dustChart.update();
+                    
+                    if (period !== 'latest') {
+                        let avgTemp = temps.reduce((a,b)=>a+b, 0) / (temps.length || 1);
+                        let avgHum = hums.reduce((a,b)=>a+b, 0) / (hums.length || 1);
+                        let avgAir = airs.reduce((a,b)=>a+b, 0) / (airs.length || 1);
+                        let avgDust = dusts.reduce((a,b)=>a+b, 0) / (dusts.length || 1);
+                        updateStatusBadge('Temp', evaluateTempHum(avgTemp, avgHum));
+                        updateStatusBadge('Air', evaluateAir(avgAir));
+                        updateStatusBadge('Dust', evaluateDust(avgDust));
+                    }
+                } else {
+                    // Provide empty state if no history fetched
+                    if (document.getElementById('minTemp')) document.getElementById('minTemp').innerText = '--';
+                    if (document.getElementById('maxTemp')) document.getElementById('maxTemp').innerText = '--';
+                    if (document.getElementById('minAir')) document.getElementById('minAir').innerText = '--';
+                    if (document.getElementById('maxAir')) document.getElementById('maxAir').innerText = '--';
+                    if (document.getElementById('minDust')) document.getElementById('minDust').innerText = '--';
+                    if (document.getElementById('maxDust')) document.getElementById('maxDust').innerText = '--';
+
+                    tempHumChart.data.labels = [];
+                    tempHumChart.data.datasets.forEach(d => d.data = []);
+                    tempHumChart.update();
+
+                    airChart.data.labels = [];
+                    airChart.data.datasets.forEach(d => d.data = []);
+                    airChart.update();
+
+                    dustChart.data.labels = [];
+                    dustChart.data.datasets.forEach(d => d.data = []);
+                    dustChart.update();
+
+                    if (period !== 'latest') {
+                        // Optional alert/toast for explicit filter, uncomment if needed
+                        // alert("No data available for the selected period.");
+                        updateStatusBadge('Temp', { text: '--', color: 'bg-slate-500' });
+                        updateStatusBadge('Air', { text: '--', color: 'bg-slate-500' });
+                        updateStatusBadge('Dust', { text: '--', color: 'bg-slate-500' });
+                    }
+                }
+
+            } catch (error) {
+                console.error("Error fetching data: ", error);
+            }
+        }
+
+        // Initial fetch
+        fetchSensorData();
+
+        // Polling logic 
+        let pollInterval = setInterval(() => fetchSensorData('latest', ''), 2000);
+
+        // Filtering & Toggle functionality
+        function setChartType(chart, type) {
+            chart.config.type = type;
+            chart.update();
+        }
+
+        document.getElementById('periodSelect').addEventListener('change', (e) => {
+            const val = e.target.value;
+            const container = document.getElementById('filterValContainer');
+            const input = document.getElementById('filterVal');
+
+            if (val === 'latest') {
+                container.classList.add('hidden');
+            } else {
+                container.classList.remove('hidden');
+                if (val === 'day') {
+                    input.type = 'date';
+                } else if (val === 'month') {
+                    input.type = 'month';
+                } else if (val === 'year') {
+                    input.type = 'number';
+                    input.min = '2000';
+                    input.max = '2099';
+                    input.value = new Date().getFullYear();
+                }
+            }
+        });
+
+        function applyFilters() {
+            const period = document.getElementById('periodSelect').value;
+            const val = document.getElementById('filterVal').value;
+
+            fetchSensorData(period, val);
+
+            // Stop polling if we are searching history
+            clearInterval(pollInterval);
+            if (period === 'latest') {
+                pollInterval = setInterval(() => fetchSensorData('latest', ''), 2000);
+            }
+        }
+    </script>
+</body>
+
+</html>
