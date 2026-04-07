@@ -1,7 +1,8 @@
 from flask import Flask, request, render_template, jsonify
 import sqlite3
 from datetime import datetime
-
+from datetime import datetime
+import pytz
 app = Flask(__name__)
 
 def get_db():
@@ -50,7 +51,8 @@ def receive():
 
     # Add to db with timestamp
     if all(x is not None for x in [temp, hum, air, dust]):
-        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        ist = pytz.timezone('Asia/Kolkata')
+        timestamp = datetime.now(ist).strftime('%H:%M:%S')
         conn = get_db()
         c = conn.cursor()
         try:
